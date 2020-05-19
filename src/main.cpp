@@ -66,8 +66,8 @@ int main() {
           double target_speed = 35;
           
           // Update PID FF (only for Throttle!)
-          // Lazy linear FF - should be quadratic with drag but then assumes throttle is linear.
-          pid_throttle.SetFF(target_speed / 120);
+          // Lazy FF - simple quadratic with drag but then assumes throttle is linear.
+          pid_throttle.SetFF(target_speed*target_speed * 1/4000);
 
           // Update PID errors
           pid_steer.UpdateError(cte);
