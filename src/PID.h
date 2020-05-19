@@ -31,6 +31,12 @@ class PID {
    */
   double TotalError();
 
+  /**
+   * Calculate the PID controller demand
+   * @output The PID controller demand
+   */
+  double ControlDemand();
+
  private:
   /**
    * PID Errors
@@ -45,6 +51,15 @@ class PID {
   double Kp;
   double Ki;
   double Kd;
+
+  // Previous CTE
+  double prev_cte;
+
+  // Total Error
+  double total_Error;
+
+  double RMSE_Sum;
+  int RMSE_Count;
 };
 
 #endif  // PID_H
