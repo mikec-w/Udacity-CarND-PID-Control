@@ -25,6 +25,13 @@ void PID::Init(double Kp_, double Ki_, double Kd_) {
   Kp = Kp_;
   Ki = Ki_;
   Kd = Kd_;
+  FF = 0;
+}
+
+void PID::SetFF(double FF_)
+{
+  // Set a Feed Forward term
+  FF = FF_;
 }
 
 void PID::UpdateError(double cte) {
@@ -57,10 +64,10 @@ double PID::ControlDemand()
   // 
   
   // Debug step
-  std::cout << std::setprecision(3) << std::fixed;
-  std::cout << total_Error << "\t" << Kp * p_error << "\t" << Ki * i_error << "\t" << Kd*d_error << "\t\t";
+  //std::cout << std::setprecision(3) << std::fixed;
+  //std::cout << total_Error << "\t" << Kp * p_error << "\t" << Ki * i_error << "\t" << Kd*d_error << "\t\t";
 
-  return Kp * p_error + Ki * i_error + Kd * d_error;
+  return Kp * p_error + Ki * i_error + Kd * d_error + FF;
 }
 
 double PID::TotalError() {

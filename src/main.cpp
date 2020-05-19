@@ -1,6 +1,8 @@
 #include <math.h>
 #include <uWS/uWS.h>
 #include <iostream>
+#include <limits>
+#include <iomanip>
 #include <string>
 #include "json.hpp"
 #include "PID.h"
@@ -38,9 +40,8 @@ int main() {
   PID pid_throttle;
 
   // Initialise
-  pid_steer.Init(0.20, 0.002, 2.00);
-  //pid_throttle.Init(0.15, 0.002, 0);
-
+  pid_steer.Init(0.2, 0.002, 2.0);
+  pid_throttle.Init(0.1, 0.00001, 0);
 
   h.onMessage([&pid_steer, &pid_throttle](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, 
                      uWS::OpCode opCode) {
@@ -59,20 +60,23 @@ int main() {
           // j[1] is the data JSON object
           double cte = std::stod(j[1]["cte"].get<string>());
           double speed = std::stod(j[1]["speed"].get<string>());
-          double angle = std::stod(j[1]["steering_angle"].get<string>());
+          //double angle = std::stod(j[1]["steering_angle"].get<string>());
           double steer_value;
           double throttle_value;
           double target_speed = 35;
           
+          // Update PID FF (only for Throttle!)
+          // Lazy linear FF - should be quadratic with drag but then assumes throttle is linear.
+          pid_throttle.SetFF(target_speed / 120);
+
           // Update PID errors
           pid_steer.UpdateError(cte);
-          //pid_throttle.UpdateError(target_speed - speed);
+          pid_throttle.UpdateError(target_speed - speed);
           
           // Get new PID outputs
           steer_value = -pid_steer.ControlDemand();
-          //throttle_value = pid_throttle.ControlDemand();
+          throttle_value = pid_throttle.ControlDemand();
 
-          
           /**
            * Calculate steering value here, remember the steering value is
            *   [-1, 1].
@@ -87,11 +91,12 @@ int main() {
           if (throttle_value < 0) throttle_value = 0;
 
           // Fix for now
-          throttle_value = 0.3;
+          //throttle_value = 0.3;
           // DEBUG
-          //std::cout << "CTE: " << cte << "\tSteering Value: " << steer_value << "\t"
-          //          << "SE:  " << target_speed-speed << "\tthrottle: " << throttle_value 
-          //          << std::endl;
+          std::cout << std::setprecision(3) << std::fixed;
+          std::cout << "CTE: " << cte << "\tSteering Value: " << steer_value << "\t"
+                    << "SE:  " << target_speed-speed << "\tthrottle: " << throttle_value 
+                    << std::endl;
                     
 
           json msgJson;

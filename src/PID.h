@@ -37,6 +37,12 @@ class PID {
    */
   double ControlDemand();
 
+/** 
+ * Set Feed Forward term
+ * @param FF The current Feed Forward for the target
+ */
+  void SetFF(double FF);
+
  private:
   /**
    * PID Errors
@@ -44,6 +50,9 @@ class PID {
   double p_error;
   double i_error;
   double d_error;
+
+  // Feed Forward
+  double FF;
 
   /**
    * PID Coefficients
