@@ -4,6 +4,7 @@
 #include <limits>
 #include <iomanip>
 #include <string>
+#include <vector>
 #include "json.hpp"
 #include "PID.h"
 
@@ -35,15 +36,25 @@ string hasData(string s) {
 int main() {
   uWS::Hub h;
 
+  // Twiddling 
+  bool enable_twiddle = false;
+  int step_count = 0;
+  double best_error = 999;
+  std::vector<double> twiddle_dp{0, 0, 0.5};
+  bool twiddle_direction = true;
+  
   // Create two PID controllers
   PID pid_steer;
   PID pid_throttle;
 
   // Initialise
-  pid_steer.Init(0.2, 0.002, 2.0);
-  pid_throttle.Init(0.1, 0.00001, 0);
+  std::vector<double> steer_gains{0.216, 0.002, 1.70};
+  std::vector<double> throttle_gains{0.1, 0.00001, 0};
+  
+  pid_steer.Init(steer_gains[0], steer_gains[1], steer_gains[2]);
+  pid_throttle.Init(throttle_gains[0], throttle_gains[1], throttle_gains[2]);
 
-  h.onMessage([&pid_steer, &pid_throttle](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, 
+  h.onMessage([&pid_steer, &pid_throttle, &enable_twiddle, &step_count, &best_error, &steer_gains, &throttle_gains, &twiddle_dp, &twiddle_direction](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, 
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -64,7 +75,57 @@ int main() {
           double steer_value;
           double throttle_value;
           double target_speed = 35;
-          
+    
+          // Increment run counter.
+          step_count++;
+
+          // GAIN TWIDDLING ALGORITHM
+          if (enable_twiddle)
+          {
+            // 2000 steps per run - ignore first 250 as we get up to speed.
+            if ((((step_count - 250) % 2000) == 0) && (step_count > 250))
+            {
+
+              // Get RMSE
+              double RMSE = pid_steer.TotalError();
+
+              // Debug Output
+              std::cout << std::setprecision(5) << std::fixed;
+              std::cout << "dp: " << twiddle_dp[0] << "\tP_gain: " << steer_gains[0] << "\tError: " << RMSE << "\tBest: " << best_error << "\n";
+              std::cout << "dp: " << twiddle_dp[1] << "\tI_gain: " << steer_gains[1] << "\tError: " << RMSE << "\tBest: " << best_error << "\n";
+              std::cout << "dp: " << twiddle_dp[2] << "\tD_gain: " << steer_gains[2] << "\tError: " << RMSE << "\tBest: " << best_error << "\n";
+
+              //Update gains....
+              if (RMSE < best_error)
+              {
+                best_error = RMSE;
+                //Update gains...
+                // std::plus adds together its two arguments:
+                for (size_t i = 0; i < steer_gains.size(); i++) steer_gains[i] += twiddle_dp[i];
+                
+                // Update Twiddle_DP
+                for (size_t i = 0; i < twiddle_dp.size(); i++)  twiddle_dp[i] *= 1.1;
+              }
+              else if (twiddle_direction)
+              {
+                twiddle_direction = false;
+                for (size_t i = 0; i < steer_gains.size(); i++) steer_gains[i] -= 2*twiddle_dp[i];
+              } 
+              else
+              {
+                // Reset
+                twiddle_direction = true;
+                // Reset Twiddle DP and add 0.9 * dp
+                for (size_t i = 0; i < steer_gains.size(); i++) steer_gains[i] += 1.9*twiddle_dp[i];
+                // Reduce DP and for next round
+                for (size_t i = 0; i < twiddle_dp.size(); i++)  twiddle_dp[i] *= 0.9;
+              }
+
+              // Reinitialise and continue (this also resets RMSE and integrator)
+              pid_steer.Init(steer_gains[0], steer_gains[1], steer_gains[2]);
+            }
+          }
+
           // Update PID FF (only for Throttle!)
           // Lazy FF - simple quadratic with drag but then assumes throttle is linear.
           pid_throttle.SetFF(target_speed*target_speed * 1/4000);
@@ -74,7 +135,7 @@ int main() {
           pid_throttle.UpdateError(target_speed - speed);
           
           // Get new PID outputs
-          steer_value = -pid_steer.ControlDemand();
+          steer_value = pid_steer.ControlDemand();
           throttle_value = pid_throttle.ControlDemand();
 
           /**
@@ -93,17 +154,17 @@ int main() {
           // Fix for now
           //throttle_value = 0.3;
           // DEBUG
-          std::cout << std::setprecision(3) << std::fixed;
-          std::cout << "CTE: " << cte << "\tSteering Value: " << steer_value << "\t"
-                    << "SE:  " << target_speed-speed << "\tthrottle: " << throttle_value 
-                    << std::endl;
+          //std::cout << std::setprecision(3) << std::fixed;
+          //std::cout << "CTE: " << cte << "\tSteering Value: " << steer_value << "\t"
+          //          << "SE:  " << target_speed-speed << "\tthrottle: " << throttle_value 
+          //          << std::endl;
                     
 
           json msgJson;
-          msgJson["steering_angle"] = steer_value;
+          msgJson["steering_angle"] = -steer_value;
           msgJson["throttle"] = throttle_value;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }  // end "telemetry" if
       } else {
